@@ -65,6 +65,22 @@ if( 'config' eq $cfg->{'address-source'} ) {
     $address = $cfg->{'address'};
     $o{verbose} && print "selected address '$address' from config file\n";
 }
+elsif( 'userdata' eq $cfg->{'address-source'} ) {
+    my $ua = LWP::UserAgent->new;
+    my $r = $ua->get('http://169.254.169.254/latest/user-data');
+    unless( $r->is_success ) {
+        die "unable to get IP address from userdata!";
+    }
+    my $userdata = $r->decoded_content;
+    $o{verbose} && print "userdata is '$userdata'\n";
+    if( $userdata =~ m/elastic-ip=(\d+\.\d+\.\d+\.\d+)/ ) {
+        $address = $1;
+        $o{verbose} && print "extracted address '$address' from userdata\n";
+    }
+    else {
+        die "can't find IP address in userdata!";
+    }
+}
 else {
     die "address source '$cfg->{'address-source'}' is not supported";
 }

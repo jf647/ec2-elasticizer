@@ -24,10 +24,22 @@ A sample configuration is in the etc director.  You need to configure
 - your accesskey
 - your secretkey
 
+
+The instance ID will be read from the EC2 metadata API.
+
 Optionally, you can configure the instance ID in the configuration by
 setting instance-id-source to 'config' and setting instance-id to the ID to
 use.  This allows you to use ec2-elasticizer from somewhere other than the
 EC2 instance you are attaching the address to.
+
+The Elastic IP address to set can be given explicitly in the configuration
+by setting address-source to 'config' and setting address to the IPv4
+address.  Alternatively, you can pass the IP address via EC2 metadata by
+including the string
+
+elastic-ip=a.b.c.d
+
+somewhere in the instance's userdata.
 
 Usage
 -----
