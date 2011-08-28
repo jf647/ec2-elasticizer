@@ -1,0 +1,10 @@
+---
+instance-id-source: metadata
+instance-id: i-XXXXXXXX
+address-source: config
+address: a.b.c.d
+force: 1
+awsregion: us-west-1
+auth:
+    accesskey: foo
+    secretkey: bar

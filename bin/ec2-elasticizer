@@ -1,0 +1,120 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use FindBin;
+use Getopt::Long;
+use LWP::UserAgent;
+use Net::Amazon::EC2;
+use YAML 'LoadFile';
+
+my %o = (
+    configfile => "$FindBin::Bin/../etc/ec2-elasticizer.yaml",
+    verbose => 0,
+    debug => 0,
+    force => 0,
+);
+GetOptions(
+    \%o,
+    "configfile=s",
+    "verbose!",
+    "debug!",
+    "force!",
+) or die "can't parse command line!";
+die "can't parse command line!" if( @ARGV );
+
+# load our config
+my $cfg = LoadFile( $o{configfile} )
+    or die "can't load config $o{configfile}!";
+
+# create an EC2 connection
+my $ec2 = Net::Amazon::EC2->new(
+    AWSAccessKeyId => $cfg->{auth}->{accesskey},
+    SecretAccessKey => $cfg->{auth}->{secretkey},
+    region => $cfg->{awsregion},
+    debug => $o{debug},
+) or die "can't instantiate EC2 interface!";
+
+# get our instance id
+my $instance_id;
+if( 'metadata' eq $cfg->{'instance-id-source'} ) {
+    my $ua = LWP::UserAgent->new;
+    my $r = $ua->get('http://169.254.169.254/latest/meta-data/instance-id');    
+    unless( $r->is_success ) {
+        die "unable to get instance id";
+    }
+    $instance_id = $r->decoded_content;
+    $o{verbose} && print "fetched instance id '$instance_id' from metadata\n";
+    my $instances = $ec2->describe_instances( InstanceId => $instance_id );
+    if( 'Net::Amazon::EC2::Errors' eq ref $instances ) {
+        error( describe_instances => $instances );
+    }
+}
+elsif( 'config' eq $cfg->{'instance-id-source'} ) {
+    $instance_id = $cfg->{'instance-id'};
+    $o{verbose} && print "fetched instance id '$instance_id' from config\n";
+}
+else {
+    die "address source '$cfg->{'instance-id-source'}' is not supported";
+}
+
+# get the IP address to assign
+my $address;
+if( 'config' eq $cfg->{'address-source'} ) {
+    $address = $cfg->{'address'};
+    $o{verbose} && print "selected address '$address' from config file\n";
+}
+else {
+    die "address source '$cfg->{'address-source'}' is not supported";
+}
+
+# ensure that the IP address is ours (and not already assigned)
+my $addresses = $ec2->describe_addresses( PublicIp => $address );
+if( 'Net::Amazon::EC2::Errors' eq ref $addresses ) {
+    error( describe_addresses => $addresses );
+}
+my $assign = 1;
+if( my $assignee = $addresses->[0]->instance_id ) {
+    $o{verbose} && print "address is already assigned to '$assignee'\n";
+    if( $instance_id eq $assignee ) {
+        $assign = 0;
+    }
+    else {
+        if( $cfg->{force} || $o{force} ) {
+            $o{verbose} && print "disassociating address from $assignee\n";
+            my $r = $ec2->disassociate_address( PublicIp => $address );
+            if( 'Net::Amazon::EC2::Errors' eq ref $r ) {
+                error( disassociate_address => $r );
+            }
+        }
+        else {
+            die "not stealing address from another instance\n";
+        }
+    }
+}
+
+# assign it to us
+if( $assign ) {
+    my $r = $ec2->associate_address( InstanceId => $instance_id, PublicIp => $address );
+    if( 'Net::Amazon::EC2::Errors' eq ref $r ) {
+        error( associate_address => $r );
+    }
+}
+
+# all done
+exit(0);
+
+# dump EC2 errors
+sub error
+{
+
+    my $method = shift;
+    my $errors = shift;
+
+    for my $error( @{ $errors->errors } ) {
+        print "\t", $error->code, ": ", $error->message, "\n";
+    }
+    die "can't call $method!";
+
+}

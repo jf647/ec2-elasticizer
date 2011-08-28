@@ -1,0 +1,40 @@
+ec2-elasticizer
+---------------
+
+This is a simple script that uses the Amazon APIs to assign an elastic IP
+address to an EC2 instance on boot.
+
+The address can either come from a YAML config file or be embedded in the
+user data of the instance.
+
+System Requirements
+-------------------
+
+- perl v5.10
+  - Net::Amazon::EC2
+  - YAML
+
+Configuration
+-------------
+
+A sample configuration is in the etc director.  You need to configure
+
+- the address
+- the AWS region
+- your accesskey
+- your secretkey
+
+Optionally, you can configure the instance ID in the configuration by
+setting instance-id-source to 'config' and setting instance-id to the ID to
+use.  This allows you to use ec2-elasticizer from somewhere other than the
+EC2 instance you are attaching the address to.
+
+Usage
+-----
+
+./ec2-elasticizer [--configfile file] [--verbose] [--debug] [--force]
+
+  configfile defaults to $FindBin::Bin/../etc/ec2-elasticizer.yaml
+  verbose is off by default and adds some additional output to the script
+  debug turns on Net::Amazon::EC2 debug logging
+  force will dissassociate the address from another instance if it is attached
