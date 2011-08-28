@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 
 use strict;
 use warnings;
@@ -36,13 +36,32 @@ my $ec2 = Net::Amazon::EC2->new(
     debug => $o{debug},
 ) or die "can't instantiate EC2 interface!";
 
+# create a web agent
+my $ua = LWP::UserAgent->new;
+
+# create a SNS connection if required
+my $sns;
+my $topic;
+if( exists $cfg->{sns_notify} ) {
+    eval "require Amazon::SNS";
+    if( $@ ) {
+        die "unable to load Amazon::SNS: $@";
+    }
+    $sns = Amazon::SNS->new( {
+        key => $cfg->{auth}->{accesskey},
+        secret => $cfg->{auth}->{secretkey},
+        service => "http://sns.$cfg->{awsregion}.amazonaws.com",
+    } ) or die "can't instantiate SNS interface!";
+    $topic = $sns->GetTopic( $cfg->{sns_notify} )
+        or die "can't get handle on topic '$cfg->{sns_notify}'!";
+}
+
 # get our instance id
 my $instance_id;
 if( 'metadata' eq $cfg->{'instance-id-source'} ) {
-    my $ua = LWP::UserAgent->new;
     my $r = $ua->get('http://169.254.169.254/latest/meta-data/instance-id');    
     unless( $r->is_success ) {
-        die "unable to get instance id";
+        die "unable to get instance id!";
     }
     $instance_id = $r->decoded_content;
     $o{verbose} && print "fetched instance id '$instance_id' from metadata\n";
@@ -110,11 +129,26 @@ if( my $assignee = $addresses->[0]->instance_id ) {
     }
 }
 
+# get our current public address
+my $r = $ua->get('http://169.254.169.254/latest/meta-data/public-ipv4');
+unless( $r->is_success ) {
+    die "unable to get public IPv4 address!";
+}
+my $current_address = $r->decoded_content;
+$o{verbose} && print "fetched current IPv4 address '$current_address' from metadata\n";
+
 # assign it to us
 if( $assign ) {
     my $r = $ec2->associate_address( InstanceId => $instance_id, PublicIp => $address );
     if( 'Net::Amazon::EC2::Errors' eq ref $r ) {
         error( associate_address => $r );
+    }
+    $o{verbose} && print "assigned '$address' to '$instance_id'\n";
+
+    # send a SNS notification if configured
+    if( $topic ) {
+        my $date = scalar localtime( time );
+        $topic->Publish( "changed IP of '$instance_id' from ephemeral '$current_address' to '$address' at $date" );
     }
 }
 

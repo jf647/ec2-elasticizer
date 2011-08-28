@@ -50,3 +50,10 @@ Usage
   verbose is off by default and adds some additional output to the script
   debug turns on Net::Amazon::EC2 debug logging
   force will dissassociate the address from another instance if it is attached
+
+SNS Notifications
+-----------------
+
+If a value is given for 'sns_notify' in the configuration, a brief
+notification message will be sent to that topic via Amazon SNS.
+

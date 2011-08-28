@@ -1,10 +1,13 @@
 ---
 instance-id-source: metadata
-instance-id: i-XXXXXXXX
-address-source: config
-address: a.b.c.d
+#instance-id-source: config
+#instance-id: i-XXXXXXXX
+address-source: userdata
+#address-source: config
+#address: a.b.c.d
 force: 1
 awsregion: us-west-1
+#sns_notify: arn:aws:sns:us-east-1:############:topic-name
 auth:
     accesskey: foo
     secretkey: bar
